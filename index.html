@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Utility Planner — Workers &amp; Resources: Soviet Republic</title>
+<meta name="description" content="Size electricity, water and sewage infrastructure for a republic by population.">
+<style>
+/* ---------- tokens: light is the base, both dark paths restate them ---------- */
+:root {
+  --ground:   #D6DAD1;
+  --sheet:    #F1F3ED;
+  --sheet-2:  #E5E8DF;
+  --ink:      #171B16;
+  --ink-soft: #4E5549;
+  --ink-mute: #6E7668;
+  --rule:     #B2B8A9;
+  --rule-soft:#C9CEC1;
+  --accent:   #9E2A1C;
+  --accent-ink:#FFFFFF;
+  --power:    #A96A0C;
+  --power-bg: #F0E3C9;
+  --water:    #245D6D;
+  --water-bg: #D5E4E7;
+  --sewage:   #566A2C;
+  --sewage-bg:#E0E6CE;
+  --field:    #FBFCF8;
+  --shadow:   0 1px 0 rgba(23,27,22,.06);
+  --focus:    #9E2A1C;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:   #121510;
+    --sheet:    #1C201A;
+    --sheet-2:  #242920;
+    --ink:      #DEE2D6;
+    --ink-soft: #A7AF9C;
+    --ink-mute: #838C79;
+    --rule:     #363D31;
+    --rule-soft:#2B3126;
+    --accent:   #DE5A4B;
+    --accent-ink:#1C201A;
+    --power:    #DDA23C;
+    --power-bg: #2E2717;
+    --water:    #5DA8BB;
+    --water-bg: #142A30;
+    --sewage:   #9DB35A;
+    --sewage-bg:#222B14;
+    --field:    #14180F;
+    --shadow:   0 1px 0 rgba(0,0,0,.4);
+    --focus:    #DE5A4B;
+  }
+}
+:root[data-theme="dark"] {
+  --ground:   #121510;
+  --sheet:    #1C201A;
+  --sheet-2:  #242920;
+  --ink:      #DEE2D6;
+  --ink-soft: #A7AF9C;
+  --ink-mute: #838C79;
+  --rule:     #363D31;
+  --rule-soft:#2B3126;
+  --accent:   #DE5A4B;
+  --accent-ink:#1C201A;
+  --power:    #DDA23C;
+  --power-bg: #2E2717;
+  --water:    #5DA8BB;
+  --water-bg: #142A30;
+  --sewage:   #9DB35A;
+  --sewage-bg:#222B14;
+  --field:    #14180F;
+  --shadow:   0 1px 0 rgba(0,0,0,.4);
+  --focus:    #DE5A4B;
+}
+
+/* ---------- base ---------- */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Helvetica Neue", Helvetica, "Liberation Sans", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.mono, input, select, button, table, .num {
+  font-family: ui-monospace, "DejaVu Sans Mono", "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+.num { font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; font-weight: 700; text-wrap: balance; }
+p { margin: 0; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 72px; }
+
+/* ---------- title block (drafting sheet header) ---------- */
+.titleblock {
+  border: 1.5px solid var(--ink);
+  background: var(--sheet);
+  margin: 24px 0 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+}
+.tb-main { padding: 18px 20px 16px; }
+.tb-eyebrow {
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--accent); font-weight: 700;
+}
+.tb-title { font-size: clamp(26px, 4.4vw, 42px); line-height: 1.05; letter-spacing: -.015em; margin-top: 6px; }
+.tb-sub { color: var(--ink-soft); font-size: 14px; margin-top: 8px; max-width: 62ch; }
+.tb-cells { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); border-left: 1.5px solid var(--ink); }
+.tb-cell {
+  padding: 10px 14px; border-bottom: 1px solid var(--rule); min-width: 118px;
+}
+.tb-cell:nth-child(odd) { border-right: 1px solid var(--rule); }
+.tb-cell:nth-last-child(-n+2) { border-bottom: 0; }
+.tb-cell dt { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-mute); }
+.tb-cell dd { margin: 2px 0 0; font-size: 14px; font-weight: 700; }
+
+/* ---------- section scaffolding ---------- */
+section { margin-top: 34px; }
+.sec-head {
+  display: flex; align-items: baseline; gap: 12px;
+  border-bottom: 1.5px solid var(--ink); padding-bottom: 7px; margin-bottom: 18px;
+}
+.sec-idx {
+  font-size: 11px; letter-spacing: .12em; font-weight: 700;
+  color: var(--accent-ink); background: var(--accent);
+  padding: 2px 7px;
+}
+.sec-head h2 { font-size: 17px; letter-spacing: .02em; text-transform: uppercase; }
+.sec-note { margin-left: auto; font-size: 12px; color: var(--ink-mute); }
+
+/* ---------- inputs ---------- */
+.panel { background: var(--sheet); border: 1px solid var(--rule); box-shadow: var(--shadow); }
+.inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0; }
+.fld { padding: 14px 16px; border-right: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft); }
+.fld label { display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: 6px; }
+.fld input, .fld select {
+  width: 100%; background: var(--field); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 0; padding: 7px 9px;
+  font-size: 16px; font-variant-numeric: tabular-nums;
+}
+.fld .hint { font-size: 11px; color: var(--ink-mute); margin-top: 5px; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; align-items: center; }
+.presets span { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-mute); margin-right: 2px; }
+button {
+  background: var(--sheet-2); color: var(--ink); border: 1px solid var(--rule);
+  padding: 6px 11px; font-size: 12px; letter-spacing: .04em; cursor: pointer; border-radius: 0;
+}
+button:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---------- utility cards ---------- */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
+.card { background: var(--sheet); border: 1px solid var(--rule); border-top: 4px solid var(--u); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.card.power  { --u: var(--power);  --u-bg: var(--power-bg); }
+.card.water  { --u: var(--water);  --u-bg: var(--water-bg); }
+.card.sewage { --u: var(--sewage); --u-bg: var(--sewage-bg); }
+.card-head { padding: 13px 16px 0; display: flex; align-items: center; gap: 9px; }
+.card-head h3 { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--u); }
+.card-glyph { width: 15px; height: 15px; flex: none; color: var(--u); }
+.headline { padding: 4px 16px 12px; }
+.headline .big { font-size: clamp(34px, 5.6vw, 48px); font-weight: 700; letter-spacing: -.03em; line-height: 1.02; }
+.headline .unit { font-size: 15px; font-weight: 400; color: var(--ink-soft); margin-left: 5px; letter-spacing: 0; }
+.headline .cap { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-mute); }
+.bar { height: 7px; background: var(--u-bg); display: flex; margin: 0 16px 12px; }
+.bar i { display: block; background: var(--u); }
+.bar i + i { opacity: .55; }
+.bar i + i + i { opacity: .3; }
+.rows { border-top: 1px solid var(--rule-soft); margin-top: auto; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 16px; font-size: 13px; border-bottom: 1px solid var(--rule-soft); }
+.row:last-child { border-bottom: 0; }
+.row span:first-child { color: var(--ink-soft); }
+.row .num { font-weight: 700; }
+.row.peak { background: var(--u-bg); }
+.row.peak span:first-child { color: var(--ink); font-weight: 700; }
+
+/* ---------- build list ---------- */
+.build { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.blist { background: var(--sheet); border: 1px solid var(--rule); box-shadow: var(--shadow); }
+.blist h3 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; padding: 12px 16px; border-bottom: 1px solid var(--rule); color: var(--u, var(--ink)); }
+.blist.power  { --u: var(--power); }
+.blist.water  { --u: var(--water); }
+.blist.sewage { --u: var(--sewage); }
+.bitem { display: flex; gap: 12px; align-items: baseline; padding: 9px 16px; border-bottom: 1px solid var(--rule-soft); font-size: 13px; }
+.bitem:last-child { border-bottom: 0; }
+.qty { font-weight: 700; font-size: 15px; min-width: 34px; color: var(--u); font-variant-numeric: tabular-nums; }
+.qty.zero { color: var(--ink-mute); }
+.bitem .cap { display: block; font-size: 11px; color: var(--ink-mute); }
+.bitem.or {
+  justify-content: center; padding: 4px 16px; font-size: 10px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--ink-mute);
+  background: var(--sheet-2);
+}
+
+/* ---------- assumptions table ---------- */
+.tablewrap { overflow-x: auto; background: var(--sheet); border: 1px solid var(--rule); box-shadow: var(--shadow); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 640px; }
+th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); vertical-align: middle; }
+thead th { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-mute); border-bottom: 1.5px solid var(--ink); font-weight: 700; }
+td.val { width: 116px; }
+td.val input {
+  width: 100%; background: var(--field); color: var(--ink); border: 1px solid var(--rule);
+  padding: 5px 7px; font-size: 14px; font-variant-numeric: tabular-nums; border-radius: 0;
+}
+td.unit { color: var(--ink-soft); white-space: nowrap; width: 96px; }
+td.src { color: var(--ink-mute); font-size: 12px; }
+tbody tr.edited td.val input { border-color: var(--accent); }
+
+/* ---------- prose / notes ---------- */
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.note { background: var(--sheet); border: 1px solid var(--rule); padding: 14px 16px; box-shadow: var(--shadow); }
+.note h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.note p { font-size: 13px; color: var(--ink-soft); }
+.note p + p { margin-top: 8px; }
+footer { margin-top: 40px; border-top: 1.5px solid var(--ink); padding-top: 14px; font-size: 12px; color: var(--ink-mute); }
+footer ul { margin: 8px 0 0; padding-left: 18px; }
+footer li { margin-bottom: 3px; }
+
+@media (max-width: 620px) {
+  .titleblock { grid-template-columns: 1fr; }
+  .tb-cells { border-left: 0; border-top: 1.5px solid var(--ink); grid-template-columns: repeat(2, 1fr); }
+  .tb-cell:nth-last-child(-n+2) { border-bottom: 1px solid var(--rule); }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="titleblock">
+    <div class="tb-main">
+      <div class="tb-eyebrow">Central Planning Office · Utilities Directorate</div>
+      <h1 class="tb-title">Power, Water &amp; Sewage Planner</h1>
+      <p class="tb-sub">Enter the population your republic has to serve. The sheet returns average and peak
+        demand for electricity, drinking water and sewage, and the plants needed to cover it.</p>
+    </div>
+    <dl class="tb-cells">
+      <div class="tb-cell"><dt>Sheet</dt><dd class="mono">UTL-01</dd></div>
+      <div class="tb-cell"><dt>Game</dt><dd class="mono">W&amp;R:SR</dd></div>
+      <div class="tb-cell"><dt>Units</dt><dd class="mono">MW · m³/day</dd></div>
+      <div class="tb-cell"><dt>Basis</dt><dd class="mono" id="tb-basis">—</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-idx">01</span>
+      <h2>Population served</h2>
+      <span class="sec-note">Every field recalculates the sheet live</span>
+    </div>
+    <div class="panel">
+      <div class="inputs">
+        <div class="fld">
+          <label for="population">Total citizens</label>
+          <input id="population" class="num" type="number" min="0" step="10" value="5000">
+          <div class="hint">Everyone housed in the republic</div>
+        </div>
+        <div class="fld">
+          <label for="tourists">Tourists (beds in use)</label>
+          <input id="tourists" class="num" type="number" min="0" step="10" value="0">
+          <div class="hint">Hotel guests use ~8× a citizen's water</div>
+        </div>
+        <div class="fld">
+          <label for="industryMW">Industry load</label>
+          <input id="industryMW" class="num" type="number" min="0" step="0.5" value="0">
+          <div class="hint">MW drawn by factories and mines</div>
+        </div>
+        <div class="fld">
+          <label for="industryWater">Industry water</label>
+          <input id="industryWater" class="num" type="number" min="0" step="1" value="0">
+          <div class="hint">m³/day for production lines</div>
+        </div>
+        <div class="fld">
+          <label for="reserve">Reserve margin</label>
+          <input id="reserve" class="num" type="number" min="0" max="200" step="5" value="20">
+          <div class="hint">% headroom added to peak figures</div>
+        </div>
+      </div>
+      <div class="presets">
+        <span>Presets</span>
+        <button type="button" data-pop="500">Village · 500</button>
+        <button type="button" data-pop="2500">Town · 2 500</button>
+        <button type="button" data-pop="10000">City · 10 000</button>
+        <button type="button" data-pop="30000">Regional centre · 30 000</button>
+        <button type="button" data-pop="80000">Capital · 80 000</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-idx">02</span>
+      <h2>Demand</h2>
+      <span class="sec-note">Size sources on average, size lines and pipes on peak</span>
+    </div>
+    <div class="cards">
+
+      <article class="card power">
+        <div class="card-head">
+          <svg class="card-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+          <h3>Electricity</h3>
+        </div>
+        <div class="headline">
+          <div class="cap">Average draw</div>
+          <div class="big num"><span id="el-avg">—</span><span class="unit">MW</span></div>
+        </div>
+        <div class="bar" aria-hidden="true"><i id="el-bar-res"></i><i id="el-bar-svc"></i><i id="el-bar-ind"></i></div>
+        <div class="rows">
+          <div class="row"><span>Housing</span><span class="num" id="el-res">—</span></div>
+          <div class="row"><span>Services &amp; civic</span><span class="num" id="el-svc">—</span></div>
+          <div class="row"><span>Industry</span><span class="num" id="el-ind">—</span></div>
+          <div class="row"><span>Energy per day</span><span class="num" id="el-mwh">—</span></div>
+          <div class="row peak"><span>Peak + reserve</span><span class="num" id="el-peak">—</span></div>
+        </div>
+      </article>
+
+      <article class="card water">
+        <div class="card-head">
+          <svg class="card-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2s7 8.2 7 12.6A7 7 0 0 1 5 14.6C5 10.2 12 2 12 2z"/></svg>
+          <h3>Drinking water</h3>
+        </div>
+        <div class="headline">
+          <div class="cap">Average supply</div>
+          <div class="big num"><span id="wa-avg">—</span><span class="unit">m³/day</span></div>
+        </div>
+        <div class="bar" aria-hidden="true"><i id="wa-bar-cit"></i><i id="wa-bar-tou"></i><i id="wa-bar-ind"></i></div>
+        <div class="rows">
+          <div class="row"><span>Citizens</span><span class="num" id="wa-cit">—</span></div>
+          <div class="row"><span>Tourists</span><span class="num" id="wa-tou">—</span></div>
+          <div class="row"><span>Industry</span><span class="num" id="wa-ind">—</span></div>
+          <div class="row"><span>Pressure to carry peak</span><span class="num" id="wa-bar-req">—</span></div>
+          <div class="row peak"><span>Peak + reserve</span><span class="num" id="wa-peak">—</span></div>
+        </div>
+      </article>
+
+      <article class="card sewage">
+        <div class="card-head">
+          <svg class="card-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 7h18v3H3zM6 11h12l-1.4 9a1 1 0 0 1-1 .9H8.4a1 1 0 0 1-1-.9z"/></svg>
+          <h3>Sewage</h3>
+        </div>
+        <div class="headline">
+          <div class="cap">Average outflow</div>
+          <div class="big num"><span id="se-avg">—</span><span class="unit">m³/day</span></div>
+        </div>
+        <div class="bar" aria-hidden="true"><i id="se-bar-cit"></i><i id="se-bar-ind"></i></div>
+        <div class="rows">
+          <div class="row"><span>From citizens &amp; tourists</span><span class="num" id="se-cit">—</span></div>
+          <div class="row"><span>From industry</span><span class="num" id="se-ind">—</span></div>
+          <div class="row"><span>Pollutant to remove</span><span class="num" id="se-poll">—</span></div>
+          <div class="row"><span>Untreated dumping fine risk</span><span class="num" id="se-warn">—</span></div>
+          <div class="row peak"><span>Peak + reserve</span><span class="num" id="se-peak">—</span></div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-idx">03</span>
+      <h2>What to build</h2>
+      <span class="sec-note">Counts cover the demand above, reserve included</span>
+    </div>
+    <div class="build">
+      <div class="blist power">
+        <h3>Generation &amp; distribution</h3>
+        <div id="build-power"></div>
+      </div>
+      <div class="blist water">
+        <h3>Water supply</h3>
+        <div id="build-water"></div>
+      </div>
+      <div class="blist sewage">
+        <h3>Sewage handling</h3>
+        <div id="build-sewage"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-idx">04</span>
+      <h2>Assumptions</h2>
+      <span class="sec-note"><button type="button" id="reset">Reset to defaults</button></span>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Coefficient</th><th>Value</th><th>Unit</th><th>Where it comes from</th></tr>
+        </thead>
+        <tbody id="coeffs"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-idx">05</span>
+      <h2>Reading the numbers</h2>
+    </div>
+    <div class="notes">
+      <div class="note">
+        <h3>Average vs peak</h3>
+        <p>Treatment plants, wells and power stations run continuously, so size them on the average
+          figure. Pipes, pumps, substations and power lines have to survive the evening rush when
+          everyone is home at once — size those on peak.</p>
+      </div>
+      <div class="note">
+        <h3>Water is bursty</h3>
+        <p>A citizen draws 0.045 m³/day only while actually inside their flat. Averaged over a full
+          day of work, school and shopping it lands near 0.01 m³/day — which is why a small water
+          treatment plant covers roughly 12 000 people.</p>
+      </div>
+      <div class="note">
+        <h3>Electricity is the soft number</h3>
+        <p>The game sets power draw per building, not per head, and heating type, industry and night
+          lighting move it a lot. The 0.9 kW average per citizen here is back-calculated from
+          residential blocks; check your substation readout and tune the coefficient to your republic.</p>
+      </div>
+      <div class="note">
+        <h3>Sewage follows water 1:1</h3>
+        <p>Whatever you pump in comes back out, so a sewage plant is sized off the same demand.
+          Dumping untreated sewage into a river pollutes the water you are drawing downstream and
+          costs you environment penalties — treat before you outfall.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <strong>Sources for the default coefficients</strong>
+    <ul>
+      <li>Water and sewage per-citizen rates, treatment plant flows and pressure conversion — <em>Ultimate Water Management Guide</em>, Steam community guide.</li>
+      <li>Measured per-citizen consumption for a 1 500-population settlement — <em>Population needs</em>, Steam community guide.</li>
+      <li>Power plant outputs and substation limits — Workers &amp; Resources official wiki and Steam discussions on wattage and power plants.</li>
+    </ul>
+    <p style="margin-top:10px">Values shift between game versions and difficulty settings. Every coefficient in section 04 is editable and your edits are remembered in this browser.</p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var DEFAULTS = {
+    elecPerCitizen:   { v: 0.90,  unit: "kW / citizen",   label: "Housing electricity, average",
+      src: "Back-calculated from residential blocks: a 32-person brick flat is rated 64 kW, and a large block reports ~5.2 MWh/day." },
+    elecPeakFactor:   { v: 2.2,   unit: "×",              label: "Electricity peak factor",
+      src: "Ratio of the building's circuit breaker rating to its average draw; evening lighting is the peak." },
+    elecServices:     { v: 35,    unit: "% of housing",   label: "Services & civic electricity",
+      src: "Shops, schools, hospitals, offices and street lighting scale with population, not floor area." },
+    waterPerCitizen:  { v: 0.010, unit: "m³/day/citizen", label: "Water per citizen, daily average",
+      src: "The 100 citizens ≈ 1 m³/day rule of thumb; matches the ~12 000 citizens a 120 m³/day plant serves." },
+    waterPeakFactor:  { v: 3.0,   unit: "×",              label: "Water peak factor",
+      src: "At home a citizen draws 0.045 m³/day — roughly 3× the daily average once everyone is in." },
+    waterPerTourist:  { v: 0.367, unit: "m³/day/tourist", label: "Water per tourist",
+      src: "Measured hotel guest consumption." },
+    sewageRatio:      { v: 1.0,   unit: "× water in",     label: "Sewage produced per water used",
+      src: "Sewage volume equals water consumed for everything except fountains and concrete plants." },
+    sewagePollution:  { v: 52,    unit: "%",              label: "Pollution level of citizen sewage",
+      src: "Determines how much pollutant a sewage plant has to strip out." },
+    substationMW:     { v: 2.5,   unit: "MW",             label: "Substation throughput",
+      src: "Typical maximum output of an electric substation." },
+    coalPlantMW:      { v: 23,    unit: "MW",             label: "Coal power plant output",
+      src: "Rated 23 MW, delivers about 23.34 MW." },
+    nuclearMW:        { v: 195,   unit: "MW",             label: "Nuclear reactor output (single)",
+      src: "4 680 MWh per day from one reactor; a twin-reactor plant doubles it." },
+    waterPlantSmall:  { v: 120,   unit: "m³/day",         label: "Small water treatment plant",
+      src: "Maximum flow 120 m³/day — about 12 000 citizens." },
+    waterPlantLarge:  { v: 300,   unit: "m³/day",         label: "Large water treatment plant",
+      src: "Maximum flow 300 m³/day — about 30 000 citizens." },
+    sewagePlantSmall: { v: 165,   unit: "m³/day",         label: "Small sewage treatment plant",
+      src: "Derived from the ~16 500 citizens the small plant is quoted to serve." },
+    sewagePlantLarge: { v: 440,   unit: "m³/day",         label: "Large sewage treatment plant",
+      src: "Maximum flow 440 m³/day — about 44 000 citizens." },
+    barPerFlow:       { v: 24,    unit: "m³/day per bar", label: "Pressure to flow conversion",
+      src: "Each bar of pressure carries up to 24 m³/day through a pipe." }
+  };
+
+  var STORE_C = "wrsr.utilities.coeffs.v1";
+  var STORE_I = "wrsr.utilities.inputs.v1";
+
+  var C = {};
+  Object.keys(DEFAULTS).forEach(function (k) { C[k] = DEFAULTS[k].v; });
+
+  function load(key) {
+    try {
+      var raw = window.localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function save(key, obj) {
+    try { window.localStorage.setItem(key, JSON.stringify(obj)); } catch (e) { /* storage off */ }
+  }
+
+  var stored = load(STORE_C);
+  if (stored) {
+    Object.keys(DEFAULTS).forEach(function (k) {
+      if (typeof stored[k] === "number" && isFinite(stored[k])) { C[k] = stored[k]; }
+    });
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var INPUT_IDS = ["population", "tourists", "industryMW", "industryWater", "reserve"];
+  var storedIn = load(STORE_I);
+  if (storedIn) {
+    INPUT_IDS.forEach(function (id) {
+      if (typeof storedIn[id] === "number" && isFinite(storedIn[id])) { $(id).value = storedIn[id]; }
+    });
+  }
+
+  function val(id) {
+    var n = parseFloat($(id).value);
+    return isFinite(n) && n > 0 ? n : 0;
+  }
+
+  /* ---------- formatting ---------- */
+  function fmt(n, dp) {
+    if (!isFinite(n)) { return "—"; }
+    if (dp === undefined) { dp = n >= 100 ? 0 : (n >= 10 ? 1 : 2); }
+    var s = n.toFixed(dp);
+    var parts = s.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    return parts.join(".");
+  }
+  function mw(n) { return fmt(n) + " MW"; }
+  function m3(n) { return fmt(n) + " m³/d"; }
+
+  /* ---------- the model ---------- */
+  function compute() {
+    var pop = val("population");
+    var tourists = val("tourists");
+    var indMW = val("industryMW");
+    var indWater = val("industryWater");
+    var reserve = 1 + val("reserve") / 100;
+
+    /* electricity, MW */
+    var elRes = pop * C.elecPerCitizen / 1000;
+    var elSvc = elRes * C.elecServices / 100;
+    var elAvg = elRes + elSvc + indMW;
+    var elPeak = ((elRes + elSvc) * C.elecPeakFactor + indMW) * reserve;
+
+    /* water, m³/day */
+    var waCit = pop * C.waterPerCitizen;
+    var waTou = tourists * C.waterPerTourist;
+    var waAvg = waCit + waTou + indWater;
+    var waPeak = ((waCit + waTou) * C.waterPeakFactor + indWater) * reserve;
+
+    /* sewage, m³/day */
+    var seCit = (waCit + waTou) * C.sewageRatio;
+    var seInd = indWater * C.sewageRatio;
+    var seAvg = seCit + seInd;
+    var sePeak = (seCit * C.waterPeakFactor + seInd) * reserve;
+
+    return {
+      pop: pop, reserve: reserve,
+      elRes: elRes, elSvc: elSvc, elInd: indMW, elAvg: elAvg, elPeak: elPeak,
+      waCit: waCit, waTou: waTou, waInd: indWater, waAvg: waAvg, waPeak: waPeak,
+      seCit: seCit, seInd: seInd, seAvg: seAvg, sePeak: sePeak,
+      /* sources and plants run flat out all day, so they are sized on average + reserve */
+      waSupply: waAvg * reserve,
+      seSupply: seAvg * reserve
+    };
+  }
+
+  /* ---------- rendering ---------- */
+  function setBar(parts, ids) {
+    var total = parts.reduce(function (a, b) { return a + b; }, 0);
+    ids.forEach(function (id, i) {
+      var el = $(id);
+      var pct = total > 0 ? (parts[i] / total) * 100 : (i === 0 ? 100 : 0);
+      el.style.width = pct + "%";
+    });
+  }
+
+  function buildItem(qty, name, caption) {
+    var d = document.createElement("div");
+    d.className = "bitem";
+    var q = document.createElement("span");
+    q.className = "qty" + (qty === 0 ? " zero" : "");
+    q.textContent = qty === null ? "–" : "×" + qty;
+    var body = document.createElement("div");
+    var n = document.createElement("strong");
+    n.textContent = name;
+    var c = document.createElement("span");
+    c.className = "cap";
+    c.textContent = caption;
+    body.appendChild(n);
+    body.appendChild(c);
+    d.appendChild(q);
+    d.appendChild(body);
+    return d;
+  }
+
+  function orDivider() {
+    var d = document.createElement("div");
+    d.className = "bitem or";
+    d.textContent = "— or —";
+    return d;
+  }
+
+  function fill(node, items) {
+    node.textContent = "";
+    items.forEach(function (i) {
+      node.appendChild(i[0] === "or" ? orDivider() : buildItem(i[0], i[1], i[2]));
+    });
+  }
+
+  function render() {
+    var r = compute();
+
+    $("tb-basis").textContent = r.pop > 0 ? fmt(r.pop, 0) + " cit." : "—";
+
+    /* electricity card */
+    $("el-avg").textContent = fmt(r.elAvg);
+    $("el-res").textContent = mw(r.elRes);
+    $("el-svc").textContent = mw(r.elSvc);
+    $("el-ind").textContent = mw(r.elInd);
+    $("el-mwh").textContent = fmt(r.elAvg * 24) + " MWh";
+    $("el-peak").textContent = mw(r.elPeak);
+    setBar([r.elRes, r.elSvc, r.elInd], ["el-bar-res", "el-bar-svc", "el-bar-ind"]);
+
+    /* water card */
+    $("wa-avg").textContent = fmt(r.waAvg);
+    $("wa-cit").textContent = m3(r.waCit);
+    $("wa-tou").textContent = m3(r.waTou);
+    $("wa-ind").textContent = m3(r.waInd);
+    $("wa-bar-req").textContent = fmt(r.waPeak / C.barPerFlow, 2) + " bar";
+    $("wa-peak").textContent = m3(r.waPeak);
+    setBar([r.waCit, r.waTou, r.waInd], ["wa-bar-cit", "wa-bar-tou", "wa-bar-ind"]);
+
+    /* sewage card */
+    $("se-avg").textContent = fmt(r.seAvg);
+    $("se-cit").textContent = m3(r.seCit);
+    $("se-ind").textContent = m3(r.seInd);
+    $("se-poll").textContent = fmt(r.seAvg * C.sewagePollution / 100) + " m³";
+    $("se-warn").textContent = r.seAvg > 0 ? "treat before outfall" : "none";
+    $("se-peak").textContent = m3(r.sePeak);
+    setBar([r.seCit, r.seInd], ["se-bar-cit", "se-bar-ind"]);
+
+    /* build lists */
+    var subs = Math.ceil(r.elPeak / C.substationMW) || 0;
+    var coal = Math.ceil(r.elPeak / C.coalPlantMW) || 0;
+    var nuke = r.elPeak > C.nuclearMW * 0.25 ? Math.ceil(r.elPeak / C.nuclearMW) : null;
+    fill($("build-power"), [
+      [subs, "Electric substation", C.substationMW + " MW each · covers " + mw(r.elPeak) + " peak"],
+      [coal, "Coal power plant", C.coalPlantMW + " MW each · " + fmt(r.elAvg * 24) + " MWh to cover per day"],
+      ["or"],
+      [nuke, "Nuclear reactor", nuke ? C.nuclearMW + " MW each" : "overkill below ~50 MW of demand"]
+    ]);
+
+    var wpS = Math.ceil(r.waSupply / C.waterPlantSmall) || 0;
+    var wpL = Math.ceil(r.waSupply / C.waterPlantLarge) || 0;
+    fill($("build-water"), [
+      [wpS, "Small water treatment plant", C.waterPlantSmall + " m³/day each · ~" + fmt(C.waterPlantSmall / C.waterPerCitizen, 0) + " citizens each"],
+      ["or"],
+      [wpL, "Large water treatment plant", C.waterPlantLarge + " m³/day each · ~" + fmt(C.waterPlantLarge / C.waterPerCitizen, 0) + " citizens each"],
+      [null, "Wells, pumps and a water tower", "Supply " + m3(r.waSupply) + " and buffer the " + m3(r.waPeak) + " evening peak"]
+    ]);
+
+    var spS = Math.ceil(r.seSupply / C.sewagePlantSmall) || 0;
+    var spL = Math.ceil(r.seSupply / C.sewagePlantLarge) || 0;
+    fill($("build-sewage"), [
+      [spS, "Small sewage treatment plant", C.sewagePlantSmall + " m³/day each · ~" + fmt(C.sewagePlantSmall / C.waterPerCitizen, 0) + " citizens each"],
+      ["or"],
+      [spL, "Large sewage treatment plant", C.sewagePlantLarge + " m³/day each · ~" + fmt(C.sewagePlantLarge / C.waterPerCitizen, 0) + " citizens each"],
+      [null, "Sewage outfall", "One outfall on three large pipes clears roughly 500 m³/day"]
+    ]);
+
+    save(STORE_I, INPUT_IDS.reduce(function (o, id) { o[id] = val(id); return o; }, {}));
+  }
+
+  /* ---------- assumptions table ---------- */
+  function renderCoeffs() {
+    var tb = $("coeffs");
+    tb.textContent = "";
+    Object.keys(DEFAULTS).forEach(function (k) {
+      var d = DEFAULTS[k];
+      var tr = document.createElement("tr");
+      tr.id = "row-" + k;
+
+      var tdL = document.createElement("td");
+      tdL.textContent = d.label;
+
+      var tdV = document.createElement("td");
+      tdV.className = "val";
+      var inp = document.createElement("input");
+      inp.type = "number";
+      inp.step = "any";
+      inp.min = "0";
+      inp.value = C[k];
+      inp.setAttribute("aria-label", d.label + " (" + d.unit + ")");
+      inp.addEventListener("input", function () {
+        var n = parseFloat(inp.value);
+        C[k] = isFinite(n) && n >= 0 ? n : DEFAULTS[k].v;
+        tr.classList.toggle("edited", C[k] !== DEFAULTS[k].v);
+        save(STORE_C, C);
+        render();
+      });
+      tdV.appendChild(inp);
+
+      var tdU = document.createElement("td");
+      tdU.className = "unit";
+      tdU.textContent = d.unit;
+
+      var tdS = document.createElement("td");
+      tdS.className = "src";
+      tdS.textContent = d.src;
+
+      tr.appendChild(tdL); tr.appendChild(tdV); tr.appendChild(tdU); tr.appendChild(tdS);
+      if (C[k] !== d.v) { tr.classList.add("edited"); }
+      tb.appendChild(tr);
+    });
+  }
+
+  /* ---------- wiring ---------- */
+  INPUT_IDS.forEach(function (id) { $(id).addEventListener("input", render); });
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pop]"), function (b) {
+    b.addEventListener("click", function () {
+      $("population").value = b.getAttribute("data-pop");
+      render();
+      syncPresets();
+    });
+  });
+
+  function syncPresets() {
+    var pop = String(val("population"));
+    Array.prototype.forEach.call(document.querySelectorAll("[data-pop]"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-pop") === pop ? "true" : "false");
+    });
+  }
+  $("population").addEventListener("input", syncPresets);
+
+  $("reset").addEventListener("click", function () {
+    Object.keys(DEFAULTS).forEach(function (k) { C[k] = DEFAULTS[k].v; });
+    save(STORE_C, C);
+    renderCoeffs();
+    render();
+  });
+
+  renderCoeffs();
+  syncPresets();
+  render();
+})();
+</script>
+</body>
+</html>
