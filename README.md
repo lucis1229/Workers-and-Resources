@@ -35,6 +35,18 @@ heating type, industry and night lighting move it a lot. The 0.9 kW average per 
 back-calculated from residential blocks and should be tuned against your own substation
 readout.
 
+The water chain runs source → treatment → trunk pipe → pumps → tower, picked from a **water
+source** (wells or surface) and an **elevation to climb**. Pipe size and pump count are not
+fixed rules — the sheet searches the combinations and returns the one with the least
+hardware, because the trade is real:
+
+- A pipe's pressure drives the flow *and* pays for the climb out of the same budget, so a
+  run near its flow ceiling has nothing left for a hill.
+- Widening the pipe buys no altitude. Every size surrenders the same 1.16% of its own limit
+  per metre, which caps a single pump stage at about 86 m whatever you lay.
+- So elevation is answered with parallel runs and pump stages, and pressure is deliberately
+  left unspent. Raise the metres and the pumps appear; you never check the terrain yourself.
+
 The electrical distribution chain runs plant → high voltage trunk → switches → transformers
 → medium voltage lines → substations. Two results fall out of it that are worth knowing:
 

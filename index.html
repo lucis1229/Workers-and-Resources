@@ -294,6 +294,19 @@ footer li { margin-bottom: 3px; }
           <div class="hint">m³/day for production lines</div>
         </div>
         <div class="fld">
+          <label for="source">Water source</label>
+          <select id="source">
+            <option value="well">Wells</option>
+            <option value="surface">Surface water</option>
+          </select>
+          <div class="hint">Wells come out clean; rivers do not</div>
+        </div>
+        <div class="fld">
+          <label for="elevation">Elevation to climb</label>
+          <input id="elevation" class="num" type="number" min="0" step="5" value="60">
+          <div class="hint">Metres from source up to the highest building</div>
+        </div>
+        <div class="fld">
           <label for="heating">Heating</label>
           <select id="heating">
             <option value="district">District heating</option>
@@ -472,6 +485,16 @@ footer li { margin-bottom: 3px; }
           residential blocks; check your substation readout and tune the coefficient to your republic.</p>
       </div>
       <div class="note">
+        <h3>Elevation is paid for in pressure</h3>
+        <p>A pipe's pressure drives the flow and buys the climb out of the same purse, so a pipe
+          run near its flow ceiling has nothing left for a hill. Widening the pipe does not help:
+          every size surrenders the same 1.16% of its own limit per metre, which caps any single
+          stage at about 86 m no matter what you lay.</p>
+        <p>So the sheet answers elevation with parallel runs and pump stages rather than fatter
+          pipe, and it deliberately leaves pressure unspent. Raise the metres and watch the pumps
+          appear — you should never have to check the terrain yourself.</p>
+      </div>
+      <div class="note">
         <h3>The medium voltage line is the pinch</h3>
         <p>A substation passes 2.5 MW but the fattest medium voltage line carries 2.20 MW, so a
           substation worked near its limit needs two feeds. Either run the second line or add
@@ -562,6 +585,28 @@ footer li { margin-bottom: 3px; }
       src: "Maximum flow 440 m³/day — about 44 000 citizens." },
     barPerFlow:       { v: 24,    unit: "m³/day per bar", label: "Pressure to flow conversion",
       src: "Each bar of pressure carries up to 24 m³/day through a pipe." },
+    wellSmall:        { v: 70,    unit: "m³/day",         label: "Small well output",
+      src: "Needs no workers and is fireproof, which makes it the quiet workhorse of a small republic." },
+    wellLarge:        { v: 215,   unit: "m³/day",         label: "Large well output",
+      src: "Rated 215 m³/day and staffed; players report closer to 160 in practice. The early-start well manages 180." },
+    surfaceInlet:     { v: 128,   unit: "m³/day",         label: "Surface water inlet",
+      src: "Rated 150 m³/day but delivers about 128. Needs its own pump, and the water arrives at roughly 77% quality." },
+    pipeSmallBar:     { v: 1.09,  unit: "bar",            label: "Small pipe pressure limit",
+      src: "Multiply by 24 for the flow ceiling: about 26 m³/day." },
+    pipeMediumBar:    { v: 2.36,  unit: "bar",            label: "Medium pipe pressure limit",
+      src: "About 57 m³/day at the ceiling." },
+    pipeLargeBar:     { v: 5.3,   unit: "bar",            label: "Large pipe pressure limit",
+      src: "About 127 m³/day at the ceiling." },
+    pipeSmallElev:    { v: 0.0126, unit: "bar / m",       label: "Small pipe, cost of climbing",
+      src: "Pressure surrendered per metre of rise." },
+    pipeMediumElev:   { v: 0.0273, unit: "bar / m",       label: "Medium pipe, cost of climbing",
+      src: "Pressure surrendered per metre of rise." },
+    pipeLargeElev:    { v: 0.0615, unit: "bar / m",       label: "Large pipe, cost of climbing",
+      src: "Pressure surrendered per metre of rise. Note it is the same 1.16% of each pipe's own limit — size buys no altitude." },
+    pumpSmallBar:     { v: 6,     unit: "bar",            label: "Small pump boost",
+      src: "The modern small pump. Early-start pumps manage only 2 bar." },
+    pumpLargeBar:     { v: 12,    unit: "bar",            label: "Large pump boost",
+      src: "The modern large pump; the early-start large manages 6." },
     heatPerCitizen:   { v: 0.105, unit: "m³ / citizen",   label: "Hot water per citizen, winter",
       src: "A small plant (210 m³ of capacity) is reckoned good for about 2 000 people. Checks out: the biggest skyscraper wants 45 m³, which lands near its ~430 residents." },
     heatM3PerGJ:      { v: 5,     unit: "m³ per GJ/day",  label: "Plant output to demand served",
@@ -605,7 +650,7 @@ footer li { margin-bottom: 3px; }
 
   var $ = function (id) { return document.getElementById(id); };
 
-  var INPUT_IDS = ["population", "tourists", "industryMW", "industryWater", "reserve"];
+  var INPUT_IDS = ["population", "tourists", "industryMW", "industryWater", "reserve", "elevation"];
   var storedIn = load(STORE_I);
   if (storedIn) {
     INPUT_IDS.forEach(function (id) {
@@ -613,6 +658,9 @@ footer li { margin-bottom: 3px; }
     });
     if (storedIn.heating === "none" || storedIn.heating === "district") {
       $("heating").value = storedIn.heating;
+    }
+    if (storedIn.source === "well" || storedIn.source === "surface") {
+      $("source").value = storedIn.source;
     }
   }
 
@@ -719,6 +767,48 @@ footer li { margin-bottom: 3px; }
     var branch = slots - 2;
     if (leaves <= 1 || branch < 1) { return 0; }
     return Math.ceil((leaves - 1) / branch);
+  }
+
+  /* Pipe pressure does double duty: it drives the flow AND pays for every metre climbed.
+     A pump can only fill a pipe to that pipe's own limit, so a stage carries you
+     (usable pressure - what the flow is already spending) / (cost per metre).
+     Running a pipe near its flow ceiling leaves nothing for the hill, so the cheapest
+     answer is often an extra parallel run rather than an extra pump. This tries the
+     sensible combinations and returns the one with the least hardware. */
+  function pipePlan(flow, climb, pumpBar) {
+    var sizes = [
+      { name: "small",  bar: C.pipeSmallBar,  elev: C.pipeSmallElev },
+      { name: "medium", bar: C.pipeMediumBar, elev: C.pipeMediumElev },
+      { name: "large",  bar: C.pipeLargeBar,  elev: C.pipeLargeElev }
+    ];
+    var best = null;
+    sizes.forEach(function (s) {
+      if (!(s.bar > 0) || !(s.elev > 0)) { return; }
+      var ceiling = s.bar * C.barPerFlow;
+      var minRuns = Math.max(1, Math.ceil(flow / ceiling) || 1);
+      for (var runs = minRuns; runs <= minRuns + 12; runs++) {
+        var perRun = flow / runs;
+        var flowBar = perRun / C.barPerFlow;
+        var usable = Math.min(pumpBar, s.bar);
+        var headroom = usable - flowBar;
+        var stages;
+        if (climb <= 0) {
+          stages = 0;
+        } else if (headroom <= 0) {
+          continue;                       /* no pressure left to climb with */
+        } else {
+          stages = Math.ceil(climb / (headroom / s.elev));
+        }
+        var pumps = stages * runs;
+        var score = runs + pumps * 1.5;   /* pumps cost more to run than pipe does */
+        if (!best || score < best.score) {
+          best = { size: s.name, bar: s.bar, runs: runs, perRun: perRun, flowBar: flowBar,
+                   headroom: headroom, climbPerStage: headroom / s.elev, stages: stages,
+                   pumps: pumps, score: score };
+        }
+      }
+    });
+    return best;
   }
 
   function marker(cls, text) {
@@ -844,12 +934,41 @@ footer li { margin-bottom: 3px; }
 
     var wpS = Math.ceil(r.waSupply / C.waterPlantSmall) || 0;
     var wpL = Math.ceil(r.waSupply / C.waterPlantLarge) || 0;
-    fill($("build-water"), [
-      [wpS, "Small water treatment plant", C.waterPlantSmall + " m³/day each · ~" + fmt(C.waterPlantSmall / C.waterPerCitizen, 0) + " citizens each"],
+    var surface = $("source").value === "surface";
+    var wellS = Math.ceil(r.waSupply / C.wellSmall) || 0;
+    var wellL = Math.ceil(r.waSupply / C.wellLarge) || 0;
+    var inlets = Math.ceil(r.waSupply / C.surfaceInlet) || 0;
+    var climb = val("elevation");
+    var plan = pipePlan(r.waSupply, climb, C.pumpSmallBar);
+
+    var sourceRows = surface
+      ? [[inlets, "Surface water inlet", fmt(C.surfaceInlet, 0) + " m³/day each · each needs its own pump"]]
+      : [[wellS, "Small well", fmt(C.wellSmall, 0) + " m³/day each · no workers, fireproof"],
+         ["or"],
+         [wellL, "Large well", fmt(C.wellLarge, 0) + " m³/day each · staffed, nearer 160 in practice"]];
+
+    var pipeRows = plan ? [
+      [plan.size.charAt(0).toUpperCase() + plan.size.slice(1) + " ×" + plan.runs, "Trunk pipe",
+        fmt(plan.perRun) + " of " + fmt(plan.bar * C.barPerFlow) + " m³/day per run · holds back " + fmt(plan.headroom, 2) + " bar for the climb"],
+      [plan.pumps, "Pump station",
+        climb > 0
+          ? plan.stages + " stage" + (plan.stages === 1 ? "" : "s") + " per run · one every " + fmt(plan.climbPerStage, 0) + " m of rise"
+          : "flat run — none needed until the ground tilts"]
+    ] : [[null, "Trunk pipe", "no pipe can carry this flow and climb " + fmt(climb, 0) + " m — split the supply or lower the reserve"]];
+
+    fill($("build-water"), [["grp", "Source"]].concat(sourceRows, [
+      ["grp", "Treatment"],
+      [wpS, "Small water treatment plant", fmt(C.waterPlantSmall, 0) + " m³/day each · ~" + fmt(C.waterPlantSmall / C.waterPerCitizen, 0) + " citizens each"],
       ["or"],
-      [wpL, "Large water treatment plant", C.waterPlantLarge + " m³/day each · ~" + fmt(C.waterPlantLarge / C.waterPerCitizen, 0) + " citizens each"],
-      [null, "Wells, pumps and a water tower", "Supply " + m3(r.waSupply) + " and buffer the " + m3(r.waPeak) + " evening peak"]
-    ]);
+      [wpL, "Large water treatment plant", fmt(C.waterPlantLarge, 0) + " m³/day each · ~" + fmt(C.waterPlantLarge / C.waterPerCitizen, 0) + " citizens each"],
+      [null, "Quality to clear", surface
+        ? "river water lands near 77% and citizens want 97% — one pass lifts it about 10%, so plan on several"
+        : "well water usually arrives clean · check it before committing, and treat only if it reads under 97%"],
+      ["grp", "Pressure and pipes"]
+    ], pipeRows, [
+      [null, "Water tower", "buffers the " + m3(r.waPeak) + " peak so the trunk only carries the " + m3(r.waSupply) + " average"],
+      [null, "Water switch", "an interconnection only · it cannot shut water off, so it buys routing, not capacity"]
+    ]));
 
     var spS = Math.ceil(r.seSupply / C.sewagePlantSmall) || 0;
     var spL = Math.ceil(r.seSupply / C.sewagePlantLarge) || 0;
@@ -879,6 +998,7 @@ footer li { margin-bottom: 3px; }
 
     var snapshot = INPUT_IDS.reduce(function (o, id) { o[id] = val(id); return o; }, {});
     snapshot.heating = $("heating").value;
+    snapshot.source = $("source").value;
     save(STORE_I, snapshot);
   }
 
@@ -928,6 +1048,7 @@ footer li { margin-bottom: 3px; }
   /* ---------- wiring ---------- */
   INPUT_IDS.forEach(function (id) { $(id).addEventListener("input", render); });
   $("heating").addEventListener("change", render);
+  $("source").addEventListener("change", render);
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-pop]"), function (b) {
     b.addEventListener("click", function () {
