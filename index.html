@@ -24,6 +24,8 @@
   --water-bg: #D5E4E7;
   --sewage:   #566A2C;
   --sewage-bg:#E0E6CE;
+  --heat:     #A0491C;
+  --heat-bg:  #F1DBC9;
   --field:    #FBFCF8;
   --shadow:   0 1px 0 rgba(23,27,22,.06);
   --focus:    #9E2A1C;
@@ -46,6 +48,8 @@
     --water-bg: #142A30;
     --sewage:   #9DB35A;
     --sewage-bg:#222B14;
+    --heat:     #E28B4E;
+    --heat-bg:  #33210F;
     --field:    #14180F;
     --shadow:   0 1px 0 rgba(0,0,0,.4);
     --focus:    #DE5A4B;
@@ -68,6 +72,8 @@
   --water-bg: #142A30;
   --sewage:   #9DB35A;
   --sewage-bg:#222B14;
+  --heat:     #E28B4E;
+  --heat-bg:  #33210F;
   --field:    #14180F;
   --shadow:   0 1px 0 rgba(0,0,0,.4);
   --focus:    #DE5A4B;
@@ -154,11 +160,13 @@ button:hover { background: var(--accent); color: var(--accent-ink); border-color
 button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 /* ---------- utility cards ---------- */
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: 16px; }
 .card { background: var(--sheet); border: 1px solid var(--rule); border-top: 4px solid var(--u); box-shadow: var(--shadow); display: flex; flex-direction: column; }
 .card.power  { --u: var(--power);  --u-bg: var(--power-bg); }
 .card.water  { --u: var(--water);  --u-bg: var(--water-bg); }
 .card.sewage { --u: var(--sewage); --u-bg: var(--sewage-bg); }
+.card.heat   { --u: var(--heat);   --u-bg: var(--heat-bg); }
+.card.off { opacity: .58; }
 .card-head { padding: 13px 16px 0; display: flex; align-items: center; gap: 9px; }
 .card-head h3 { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--u); }
 .card-glyph { width: 15px; height: 15px; flex: none; color: var(--u); }
@@ -179,12 +187,13 @@ button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink
 .row.peak span:first-child { color: var(--ink); font-weight: 700; }
 
 /* ---------- build list ---------- */
-.build { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.build { display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: 16px; }
 .blist { background: var(--sheet); border: 1px solid var(--rule); box-shadow: var(--shadow); }
 .blist h3 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; padding: 12px 16px; border-bottom: 1px solid var(--rule); color: var(--u, var(--ink)); }
 .blist.power  { --u: var(--power); }
 .blist.water  { --u: var(--water); }
 .blist.sewage { --u: var(--sewage); }
+.blist.heat   { --u: var(--heat); }
 .bitem { display: flex; gap: 12px; align-items: baseline; padding: 9px 16px; border-bottom: 1px solid var(--rule-soft); font-size: 13px; }
 .bitem:last-child { border-bottom: 0; }
 .qty { font-weight: 700; font-size: 15px; min-width: 34px; color: var(--u); font-variant-numeric: tabular-nums; }
@@ -236,14 +245,15 @@ footer li { margin-bottom: 3px; }
   <header class="titleblock">
     <div class="tb-main">
       <div class="tb-eyebrow">Central Planning Office · Utilities Directorate</div>
-      <h1 class="tb-title">Power, Water &amp; Sewage Planner</h1>
+      <h1 class="tb-title">Power, Water, Sewage &amp; Heat</h1>
       <p class="tb-sub">Enter the population your republic has to serve. The sheet returns average and peak
-        demand for electricity, drinking water and sewage, and the plants needed to cover it.</p>
+        demand for electricity, drinking water, sewage and district heating, and the plants needed to
+        cover it.</p>
     </div>
     <dl class="tb-cells">
       <div class="tb-cell"><dt>Sheet</dt><dd class="mono">UTL-01</dd></div>
       <div class="tb-cell"><dt>Game</dt><dd class="mono">W&amp;R:SR</dd></div>
-      <div class="tb-cell"><dt>Units</dt><dd class="mono">MW · m³/day</dd></div>
+      <div class="tb-cell"><dt>Units</dt><dd class="mono">MW · m³ · GJ</dd></div>
       <div class="tb-cell"><dt>Basis</dt><dd class="mono" id="tb-basis">—</dd></div>
     </dl>
   </header>
@@ -275,6 +285,14 @@ footer li { margin-bottom: 3px; }
           <label for="industryWater">Industry water</label>
           <input id="industryWater" class="num" type="number" min="0" step="1" value="0">
           <div class="hint">m³/day for production lines</div>
+        </div>
+        <div class="fld">
+          <label for="heating">Heating</label>
+          <select id="heating">
+            <option value="district">District heating</option>
+            <option value="none">None — seasons off</option>
+          </select>
+          <div class="hint">Only exists when seasons are enabled</div>
         </div>
         <div class="fld">
           <label for="reserve">Reserve margin</label>
@@ -353,8 +371,27 @@ footer li { margin-bottom: 3px; }
           <div class="row"><span>From citizens &amp; tourists</span><span class="num" id="se-cit">—</span></div>
           <div class="row"><span>From industry</span><span class="num" id="se-ind">—</span></div>
           <div class="row"><span>Pollutant to remove</span><span class="num" id="se-poll">—</span></div>
-          <div class="row"><span>Untreated dumping fine risk</span><span class="num" id="se-warn">—</span></div>
+          <div class="row"><span>Share of water returned</span><span class="num" id="se-warn">—</span></div>
           <div class="row peak"><span>Peak + reserve</span><span class="num" id="se-peak">—</span></div>
+        </div>
+      </article>
+
+      <article class="card heat" id="card-heat">
+        <div class="card-head">
+          <svg class="card-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 2c.6 3.4-2.5 4.6-2.5 8A6.5 6.5 0 0 0 12 16.5 6.5 6.5 0 0 0 18.5 10c0-4.2-3.4-6.4-5-8 .3 3-1.2 4.6-2.3 4.6C9.9 6.6 8.4 4.7 8 2z"/><path d="M4 19h16v3H4z"/></svg>
+          <h3>Heating</h3>
+        </div>
+        <div class="headline">
+          <div class="cap">Hot water demand</div>
+          <div class="big num"><span id="he-avg">—</span><span class="unit">m³</span></div>
+        </div>
+        <div class="bar" aria-hidden="true"><i id="he-bar-dem"></i><i id="he-bar-loss"></i></div>
+        <div class="rows">
+          <div class="row"><span>Buildings</span><span class="num" id="he-dem">—</span></div>
+          <div class="row"><span>Pipe losses</span><span class="num" id="he-loss">—</span></div>
+          <div class="row"><span>Plant output</span><span class="num" id="he-gj">—</span></div>
+          <div class="row"><span>Coal burned</span><span class="num" id="he-coal">—</span></div>
+          <div class="row peak"><span>Design + reserve</span><span class="num" id="he-peak">—</span></div>
         </div>
       </article>
 
@@ -379,6 +416,10 @@ footer li { margin-bottom: 3px; }
       <div class="blist sewage">
         <h3>Sewage handling</h3>
         <div id="build-sewage"></div>
+      </div>
+      <div class="blist heat">
+        <h3>Heating</h3>
+        <div id="build-heat"></div>
       </div>
     </div>
   </section>
@@ -424,6 +465,14 @@ footer li { margin-bottom: 3px; }
           residential blocks; check your substation readout and tune the coefficient to your republic.</p>
       </div>
       <div class="note">
+        <h3>Heating counts in two currencies</h3>
+        <p>Buildings ask for hot water in m³ and heating plants are rated in GJ, which is what makes
+          the system hard to read in game. Five m³ of demand per GJ/day of output converts between
+          them, so match exchangers to the m³ figure and plants to the GJ figure.</p>
+        <p>Bury the pipes. Above ground the heat bleeds away and distant blocks arrive cold; buried
+          runs with a pumping station hold the loss near 15%.</p>
+      </div>
+      <div class="note">
         <h3>Sewage follows water 1:1</h3>
         <p>Whatever you pump in comes back out, so a sewage plant is sized off the same demand.
           Dumping untreated sewage into a river pollutes the water you are drawing downstream and
@@ -438,6 +487,7 @@ footer li { margin-bottom: 3px; }
       <li>Water and sewage per-citizen rates, treatment plant flows and pressure conversion — <em>Ultimate Water Management Guide</em>, Steam community guide.</li>
       <li>Measured per-citizen consumption for a 1 500-population settlement — <em>Population needs</em>, Steam community guide.</li>
       <li>Power plant outputs and substation limits — Workers &amp; Resources official wiki and Steam discussions on wattage and power plants.</li>
+      <li>Heating plant and exchanger capacities, pipe reach and losses — Steam discussions on heating mechanics and optimal heating setups.</li>
     </ul>
     <p style="margin-top:10px">Values shift between game versions and difficulty settings. Every coefficient in section 04 is editable and your edits are remembered in this browser.</p>
   </footer>
@@ -480,7 +530,23 @@ footer li { margin-bottom: 3px; }
     sewagePlantLarge: { v: 440,   unit: "m³/day",         label: "Large sewage treatment plant",
       src: "Maximum flow 440 m³/day — about 44 000 citizens." },
     barPerFlow:       { v: 24,    unit: "m³/day per bar", label: "Pressure to flow conversion",
-      src: "Each bar of pressure carries up to 24 m³/day through a pipe." }
+      src: "Each bar of pressure carries up to 24 m³/day through a pipe." },
+    heatPerCitizen:   { v: 0.105, unit: "m³ / citizen",   label: "Hot water per citizen, winter",
+      src: "A small plant (210 m³ of capacity) is reckoned good for about 2 000 people. Checks out: the biggest skyscraper wants 45 m³, which lands near its ~430 residents." },
+    heatM3PerGJ:      { v: 5,     unit: "m³ per GJ/day",  label: "Plant output to demand served",
+      src: "Stated production-to-capacity ratio of 1:5, and both plants match it — 210 GJ carries a 1 050 m³ tank, 42 GJ carries 210 m³." },
+    heatPipeLoss:     { v: 15,    unit: "%",              label: "Heat lost in pipes",
+      src: "Buried pipes with a pumping station drop 10–20%; above-ground runs lose considerably more." },
+    heatPlantSmall:   { v: 42,    unit: "GJ/day",         label: "Small heating plant output",
+      src: "Serves 210 m³ of demand — roughly 2 000 citizens." },
+    heatPlantLarge:   { v: 210,   unit: "GJ/day",         label: "Large heating plant output",
+      src: "Serves 1 050 m³ of demand — roughly 10 000 citizens." },
+    heatExchSmall:    { v: 100,   unit: "m³",             label: "Small heat exchanger",
+      src: "Three of them saturate a small heating plant." },
+    heatExchLarge:    { v: 300,   unit: "m³",             label: "Large heat exchanger",
+      src: "3.5 of them draw a large plant's full continuous output; in practice 3 large plus 1 small fills the 1 050 m³." },
+    heatCoalPerGJ:    { v: 0.04,  unit: "t / GJ",         label: "Coal burned per GJ",
+      src: "A large plant eats 8.4 t per workday for its 210 GJ." }
   };
 
   var STORE_C = "wrsr.utilities.coeffs.v1";
@@ -514,6 +580,9 @@ footer li { margin-bottom: 3px; }
     INPUT_IDS.forEach(function (id) {
       if (typeof storedIn[id] === "number" && isFinite(storedIn[id])) { $(id).value = storedIn[id]; }
     });
+    if (storedIn.heating === "none" || storedIn.heating === "district") {
+      $("heating").value = storedIn.heating;
+    }
   }
 
   function val(id) {
@@ -559,11 +628,21 @@ footer li { margin-bottom: 3px; }
     var seAvg = seCit + seInd;
     var sePeak = (seCit * C.waterPeakFactor + seInd) * reserve;
 
+    /* heating: buildings ask for m³ of hot water, plants are rated in GJ/day.
+       Pipe losses sit between the two, so the plant has to over-produce. */
+    var heating = $("heating").value !== "none";
+    var heDem = heating ? pop * C.heatPerCitizen : 0;
+    var heLoss = heDem / (1 - Math.min(C.heatPipeLoss, 95) / 100) - heDem;
+    var heTotal = heDem + heLoss;
+    var hePeak = heTotal * reserve;
+    var heGJ = C.heatM3PerGJ > 0 ? hePeak / C.heatM3PerGJ : 0;
+
     return {
-      pop: pop, reserve: reserve,
+      pop: pop, reserve: reserve, heating: heating,
       elRes: elRes, elSvc: elSvc, elInd: indMW, elAvg: elAvg, elPeak: elPeak,
       waCit: waCit, waTou: waTou, waInd: indWater, waAvg: waAvg, waPeak: waPeak,
       seCit: seCit, seInd: seInd, seAvg: seAvg, sePeak: sePeak,
+      heDem: heDem, heLoss: heLoss, heTotal: heTotal, hePeak: hePeak, heGJ: heGJ,
       /* sources and plants run flat out all day, so they are sized on average + reserve */
       waSupply: waAvg * reserve,
       seSupply: seAvg * reserve
@@ -641,9 +720,25 @@ footer li { margin-bottom: 3px; }
     $("se-cit").textContent = m3(r.seCit);
     $("se-ind").textContent = m3(r.seInd);
     $("se-poll").textContent = fmt(r.seAvg * C.sewagePollution / 100) + " m³";
-    $("se-warn").textContent = r.seAvg > 0 ? "treat before outfall" : "none";
+    $("se-warn").textContent = fmt(C.sewageRatio * 100, 0) + " %";
     $("se-peak").textContent = m3(r.sePeak);
     setBar([r.seCit, r.seInd], ["se-bar-cit", "se-bar-ind"]);
+
+    /* heating card */
+    $("card-heat").classList.toggle("off", !r.heating);
+    if (r.heating) {
+      $("he-avg").textContent = fmt(r.heTotal);
+      $("he-dem").textContent = fmt(r.heDem) + " m³";
+      $("he-loss").textContent = fmt(r.heLoss) + " m³";
+      $("he-gj").textContent = fmt(r.heGJ) + " GJ/d";
+      $("he-coal").textContent = fmt(r.heGJ * C.heatCoalPerGJ) + " t/d";
+      $("he-peak").textContent = fmt(r.hePeak) + " m³";
+    } else {
+      ["he-avg", "he-dem", "he-loss", "he-gj", "he-coal", "he-peak"].forEach(function (id) {
+        $(id).textContent = id === "he-avg" ? "0" : "—";
+      });
+    }
+    setBar([r.heDem, r.heLoss], ["he-bar-dem", "he-bar-loss"]);
 
     /* build lists */
     var subs = Math.ceil(r.elPeak / C.substationMW) || 0;
@@ -674,7 +769,26 @@ footer li { margin-bottom: 3px; }
       [null, "Sewage outfall", "One outfall on three large pipes clears roughly 500 m³/day"]
     ]);
 
-    save(STORE_I, INPUT_IDS.reduce(function (o, id) { o[id] = val(id); return o; }, {}));
+    if (!r.heating) {
+      fill($("build-heat"), [
+        [null, "Nothing to build", "Heating only exists with seasons enabled"]
+      ]);
+    } else {
+      var hpS = Math.ceil(r.heGJ / C.heatPlantSmall) || 0;
+      var hpL = Math.ceil(r.heGJ / C.heatPlantLarge) || 0;
+      var hxL = Math.ceil(r.hePeak / C.heatExchLarge) || 0;
+      fill($("build-heat"), [
+        [hpS, "Small heating plant", C.heatPlantSmall + " GJ/day each · ~" + fmt(C.heatPlantSmall * C.heatM3PerGJ / C.heatPerCitizen, 0) + " citizens each"],
+        ["or"],
+        [hpL, "Large heating plant", C.heatPlantLarge + " GJ/day each · ~" + fmt(C.heatPlantLarge * C.heatM3PerGJ / C.heatPerCitizen, 0) + " citizens each"],
+        [hxL, "Large heat exchanger", C.heatExchLarge + " m³ each · covers " + fmt(r.hePeak) + " m³ of demand"],
+        [null, "Buried pipes and pumping stations", "1 km reach, ~2 km with pumps · burying them keeps losses near " + fmt(C.heatPipeLoss, 0) + "%"]
+      ]);
+    }
+
+    var snapshot = INPUT_IDS.reduce(function (o, id) { o[id] = val(id); return o; }, {});
+    snapshot.heating = $("heating").value;
+    save(STORE_I, snapshot);
   }
 
   /* ---------- assumptions table ---------- */
@@ -722,6 +836,7 @@ footer li { margin-bottom: 3px; }
 
   /* ---------- wiring ---------- */
   INPUT_IDS.forEach(function (id) { $(id).addEventListener("input", render); });
+  $("heating").addEventListener("change", render);
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-pop]"), function (b) {
     b.addEventListener("click", function () {

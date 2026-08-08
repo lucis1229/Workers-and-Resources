@@ -1,7 +1,7 @@
 # Utility Planner — Workers & Resources: Soviet Republic
 
-Enter a population, get the electricity, drinking water and sewage capacity your republic
-needs, plus the plants required to cover it.
+Enter a population, get the electricity, drinking water, sewage and district heating
+capacity your republic needs, plus the plants required to cover it.
 
 Everything is one static file — `index.html`, no build step, no dependencies, works offline.
 
@@ -17,7 +17,8 @@ npx http-server . -p 8080     # then open http://localhost:8080
 
 ## What it calculates
 
-For a given population (plus optional tourists, industry load and reserve margin):
+For a given population (plus optional tourists, industry load, heating mode and reserve
+margin):
 
 | Output | Use it for |
 | --- | --- |
@@ -33,6 +34,16 @@ Electricity is the soft number. The game sets power draw per building, not per h
 heating type, industry and night lighting move it a lot. The 0.9 kW average per citizen is
 back-calculated from residential blocks and should be tuned against your own substation
 readout.
+
+Heating is counted in two currencies because the game does: buildings ask for hot water in
+m³ while plants are rated in GJ. The conversion is 5 m³ of demand per GJ/day of output —
+match heat exchangers to the m³ figure and plants to the GJ figure. Set heating to *None*
+if you play with seasons off, since the system doesn't exist then.
+
+The heating figures are derived rather than quoted, but four independent data points agree:
+both plant sizes hit the stated 1:5 production-to-capacity ratio (210 GJ ↔ 1 050 m³ and
+42 GJ ↔ 210 m³), a small plant is reckoned good for ~2 000 people, and the resulting
+0.105 m³/citizen puts the largest skyscraper's 45 m³ at ~430 residents.
 
 ## Tuning it
 
@@ -51,6 +62,8 @@ defaults are a starting point, not gospel.
   (Steam community guide).
 - Power plant outputs and substation limits — the official Workers & Resources wiki and
   Steam discussions on wattage and power plants.
+- Heating plant and exchanger capacities, pipe reach and losses — Steam discussions on
+  heating mechanics and optimal heating setups.
 
 ## Files
 
