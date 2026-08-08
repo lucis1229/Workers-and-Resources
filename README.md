@@ -40,6 +40,9 @@ The electrical distribution chain runs plant → high voltage trunk → switches
 
 - A substation passes 2.5 MW but the largest medium voltage line carries 2.20 MW, so a
   substation near its limit needs two feeds.
+- Switches come in a 3-line and a 5-line post and the sheet costs both. One slot takes the
+  incoming feed and the rest branch onward, so reaching N transformers takes N−1 of the
+  small posts but only about a third as many large ones.
 - Medium voltage switches never turn out to be capacity-driven. A transformer runs out of
   MW (13.2) before it runs out of slots (6 × 2.5 MW of substation), so those switches are a
   routing part for working around terrain, and the sheet says so rather than inventing a count.
