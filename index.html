@@ -198,11 +198,18 @@ button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink
 .bitem:last-child { border-bottom: 0; }
 .qty { font-weight: 700; font-size: 15px; min-width: 34px; color: var(--u); font-variant-numeric: tabular-nums; }
 .qty.zero { color: var(--ink-mute); }
+.qty.spec { font-size: 13px; min-width: 58px; letter-spacing: -.02em; }
+.qty { white-space: nowrap; }
 .bitem .cap { display: block; font-size: 11px; color: var(--ink-mute); }
 .bitem.or {
   justify-content: center; padding: 4px 16px; font-size: 10px;
   letter-spacing: .18em; text-transform: uppercase; color: var(--ink-mute);
   background: var(--sheet-2);
+}
+.bitem.grp {
+  padding: 7px 16px 5px; font-size: 10px; font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--u);
+  background: var(--sheet-2); border-bottom-color: var(--rule);
 }
 
 /* ---------- assumptions table ---------- */
@@ -465,6 +472,14 @@ footer li { margin-bottom: 3px; }
           residential blocks; check your substation readout and tune the coefficient to your republic.</p>
       </div>
       <div class="note">
+        <h3>The medium voltage line is the pinch</h3>
+        <p>A substation passes 2.5 MW but the fattest medium voltage line carries 2.20 MW, so a
+          substation worked near its limit needs two feeds. Either run the second line or add
+          another substation and let each sit lower.</p>
+        <p>Switches are interconnections, despite the name — they cannot cut power. Three slots
+          each, one in and two out, so branching a trunk to N transformers takes N−1 of them.</p>
+      </div>
+      <div class="note">
         <h3>Heating counts in two currencies</h3>
         <p>Buildings ask for hot water in m³ and heating plants are rated in GJ, which is what makes
           the system hard to read in game. Five m³ of demand per GJ/day of output converts between
@@ -517,6 +532,18 @@ footer li { margin-bottom: 3px; }
       src: "Determines how much pollutant a sewage plant has to strip out." },
     substationMW:     { v: 2.5,   unit: "MW",             label: "Substation throughput",
       src: "Typical maximum output of an electric substation." },
+    substationRange:  { v: 325,   unit: "m",              label: "Substation reach",
+      src: "Buildings past roughly 325 m from the substation lose power." },
+    transformerOuts:  { v: 6,     unit: "MV lines",       label: "Transformer outputs",
+      src: "A power transformer takes one high voltage connection and splits it into six medium voltage ones." },
+    switchSlots:      { v: 3,     unit: "slots",          label: "Slots per power switch",
+      src: "High and medium voltage switches carry three slots each — one feed in, two branches out. They interconnect lines; they do not switch anything off." },
+    hvLineMin:        { v: 4,     unit: "MW",             label: "Smallest high voltage line",
+      src: "The high voltage range runs from about 4 MW up." },
+    hvLineMax:        { v: 18,    unit: "MW",             label: "Largest high voltage line",
+      src: "The top of the high voltage range; roughly eight options sit between it and the smallest." },
+    mvLineMax:        { v: 2.2,   unit: "MW",             label: "Largest medium voltage line",
+      src: "Medium voltage comes in 0.65, 1.20 and 2.20 MW variants; this sets the top of that ladder." },
     coalPlantMW:      { v: 23,    unit: "MW",             label: "Coal power plant output",
       src: "Rated 23 MW, delivers about 23.34 MW." },
     nuclearMW:        { v: 195,   unit: "MW",             label: "Nuclear reactor output (single)",
@@ -662,9 +689,10 @@ footer li { margin-bottom: 3px; }
   function buildItem(qty, name, caption) {
     var d = document.createElement("div");
     d.className = "bitem";
+    var spec = typeof qty === "string";
     var q = document.createElement("span");
-    q.className = "qty" + (qty === 0 ? " zero" : "");
-    q.textContent = qty === null ? "–" : "×" + qty;
+    q.className = "qty" + (qty === 0 ? " zero" : "") + (spec ? " spec" : "");
+    q.textContent = spec ? qty : (qty === null ? "–" : "×" + qty);
     var body = document.createElement("div");
     var n = document.createElement("strong");
     n.textContent = name;
@@ -678,17 +706,19 @@ footer li { margin-bottom: 3px; }
     return d;
   }
 
-  function orDivider() {
+  function marker(cls, text) {
     var d = document.createElement("div");
-    d.className = "bitem or";
-    d.textContent = "— or —";
+    d.className = "bitem " + cls;
+    d.textContent = text;
     return d;
   }
 
   function fill(node, items) {
     node.textContent = "";
     items.forEach(function (i) {
-      node.appendChild(i[0] === "or" ? orDivider() : buildItem(i[0], i[1], i[2]));
+      if (i[0] === "or") { node.appendChild(marker("or", "— or —")); return; }
+      if (i[0] === "grp") { node.appendChild(marker("grp", i[1])); return; }
+      node.appendChild(buildItem(i[0], i[1], i[2]));
     });
   }
 
@@ -744,11 +774,52 @@ footer li { margin-bottom: 3px; }
     var subs = Math.ceil(r.elPeak / C.substationMW) || 0;
     var coal = Math.ceil(r.elPeak / C.coalPlantMW) || 0;
     var nuke = r.elPeak > C.nuclearMW * 0.25 ? Math.ceil(r.elPeak / C.nuclearMW) : null;
+
+    /* distribution chain: plant --HV--> switches --> transformers --MV--> substations */
+    var hvRuns = Math.ceil(r.elPeak / C.hvLineMax) || 0;
+    var hvPerRun = hvRuns > 0 ? r.elPeak / hvRuns : 0;
+
+    /* a transformer is capped by its own MV outputs; it also has to carry its share of MW */
+    var trafoMW = C.transformerOuts * C.mvLineMax;
+    var trafos = Math.max(Math.ceil(r.elPeak / trafoMW) || 0, Math.ceil(subs / C.transformerOuts) || 0);
+
+    /* 3-slot switches branch one feed into two, so a tree feeding N transformers needs N-1 */
+    var hvSwitch = Math.max(0, trafos - 1);
+
+    /* A transformer's slots are never the binding constraint: at 2.5 MW per substation it
+       carries 5.3 substations before it runs out of MW, and it has 6 slots. So medium
+       voltage switches are a routing device here, not a capacity one. */
+    var hvNeeded = r.elPeak >= C.hvLineMin;
+
+    var mvPerSub = subs > 0 ? r.elPeak / subs : 0;
+    var mvFeeds = Math.max(1, Math.ceil(mvPerSub / C.mvLineMax) || 1);
+    var mvLadder = [0.65, 1.2, C.mvLineMax];
+    var mvPick = mvLadder.find(function (s) { return s >= mvPerSub / mvFeeds - 1e-9; }) || C.mvLineMax;
+
     fill($("build-power"), [
-      [subs, "Electric substation", C.substationMW + " MW each · covers " + mw(r.elPeak) + " peak"],
+      ["grp", "Generation"],
       [coal, "Coal power plant", C.coalPlantMW + " MW each · " + fmt(r.elAvg * 24) + " MWh to cover per day"],
       ["or"],
-      [nuke, "Nuclear reactor", nuke ? C.nuclearMW + " MW each" : "overkill below ~50 MW of demand"]
+      [nuke, "Nuclear reactor", nuke ? C.nuclearMW + " MW each" : "overkill below ~50 MW of demand"],
+      ["grp", "Distribution"],
+      [hvNeeded ? "≥" + fmt(hvPerRun, 1) + " MW" : "–", "High voltage trunk line",
+        !hvNeeded
+          ? "under the " + C.hvLineMin + " MW smallest HV line — run medium voltage straight off the plant"
+          : (hvRuns > 1 ? hvRuns + " runs to carry the full " + mw(r.elPeak) : "a single run carries the whole load")
+            + " · options span " + C.hvLineMin + "–" + C.hvLineMax + " MW"],
+      [hvNeeded ? hvSwitch : null, "High voltage switch",
+        hvNeeded
+          ? C.switchSlots + " slots each — one in, two out · branches the trunk to " + trafos + " transformer" + (trafos === 1 ? "" : "s")
+          : "nothing to branch at this scale"],
+      [hvNeeded ? trafos : null, "Power transformer",
+        hvNeeded
+          ? "1 HV in, " + C.transformerOuts + " MV out · " + fmt(trafoMW, 1) + " MW each at full slots"
+          : "no high voltage to step down"],
+      [fmt(mvPick, 2) + " MW", "Medium voltage line",
+        (mvFeeds > 1 ? mvFeeds + " feeds per substation · " : "one run per substation · ") + "each carrying " + fmt(mvPerSub / mvFeeds, 2) + " MW"],
+      [null, "Medium voltage switch",
+        C.switchSlots + " slots each · a routing part, not a capacity one — transformer slots outlast their own MW"],
+      [subs, "Electric substation", C.substationMW + " MW each · " + fmt(C.substationRange, 0) + " m reach"]
     ]);
 
     var wpS = Math.ceil(r.waSupply / C.waterPlantSmall) || 0;

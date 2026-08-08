@@ -24,7 +24,7 @@ margin):
 | --- | --- |
 | **Average demand** — MW, m³/day | Sizing sources: power plants, wells, treatment plants. These run continuously. |
 | **Peak demand** — MW, m³/day | Sizing distribution: substations, power lines, pipes, pumps. These have to survive the evening when everyone is home at once. |
-| **Build list** | How many substations, power plants and treatment plants cover the demand. |
+| **Build list** | How many power plants, treatment plants and heating plants cover the demand, plus the full electrical distribution chain — trunk line rating, switches, transformers, medium voltage line size and substations. |
 
 Water and sewage are the solid numbers — the game's per-citizen rates are well documented
 and the treatment plant capacities cross-check against them exactly (a 120 m³/day plant is
@@ -34,6 +34,18 @@ Electricity is the soft number. The game sets power draw per building, not per h
 heating type, industry and night lighting move it a lot. The 0.9 kW average per citizen is
 back-calculated from residential blocks and should be tuned against your own substation
 readout.
+
+The electrical distribution chain runs plant → high voltage trunk → switches → transformers
+→ medium voltage lines → substations. Two results fall out of it that are worth knowing:
+
+- A substation passes 2.5 MW but the largest medium voltage line carries 2.20 MW, so a
+  substation near its limit needs two feeds.
+- Medium voltage switches never turn out to be capacity-driven. A transformer runs out of
+  MW (13.2) before it runs out of slots (6 × 2.5 MW of substation), so those switches are a
+  routing part for working around terrain, and the sheet says so rather than inventing a count.
+
+Below about 4 MW of peak demand — roughly 1 300 citizens — high voltage is skipped entirely
+and the sheet tells you to run medium voltage straight off the plant.
 
 Heating is counted in two currencies because the game does: buildings ask for hot water in
 m³ while plants are rated in GJ. The conversion is 5 m³ of demand per GJ/day of output —
